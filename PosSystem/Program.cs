@@ -202,6 +202,67 @@ app.MapGet("/reports/sales", (DateTime from, DateTime to, Repositories repo) =>
     return Results.Ok(new { from, to, total, profit, count = sales.Count });
 });
 
+// CSV export for sales report
+app.MapGet("/reports/sales/export", (DateTime from, DateTime to, Repositories repo) =>
+{
+    var sales = repo.Sales.Where(s => s.Timestamp >= from && s.Timestamp <= to).ToList();
+    var sb = new System.Text.StringBuilder();
+    sb.AppendLine("SaleId,Timestamp,CashierId,Total");
+    foreach (var s in sales)
+        sb.AppendLine($"{s.Id},{s.Timestamp:o},{s.CashierId},{s.Total}");
+    var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    string filename = $"sales_{from:yyyyMMdd}_{to:yyyyMMdd}.csv";
+    return Results.File(bytes, "text/csv", filename);
+});
+
+// Stock report
+app.MapGet("/reports/stock", (Repositories repo) =>
+{
+    var totalValue = repo.Products.Sum(p => p.Stock * p.CostPrice);
+    return Results.Ok(new { totalValue, products = repo.Products });
+});
+
+// CSV export for stock
+app.MapGet("/reports/stock/export", (Repositories repo) =>
+{
+    var sb = new System.Text.StringBuilder();
+    sb.AppendLine("Id,Code,Name,Stock,CostPrice,NormalPrice,StaffPrice,WholesalePrice");
+    foreach (var p in repo.Products)
+        sb.AppendLine($"{p.Id},{p.Code},{p.Name},{p.Stock},{p.CostPrice},{p.NormalPrice},{p.StaffPrice},{p.WholesalePrice}");
+    var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    return Results.File(bytes, "text/csv", "stock_report.csv");
+});
+
+// Get sale by id
+app.MapGet("/sales/{id}", (int id, Repositories repo) =>
+    repo.Sales.FirstOrDefault(s => s.Id == id) is Sale sale ? Results.Ok(sale) : Results.NotFound());
+
+// Receipt generation (plain text)
+app.MapGet("/sales/{id}/receipt", (int id, Repositories repo) =>
+{
+    var sale = repo.Sales.FirstOrDefault(s => s.Id == id);
+    if (sale is null) return Results.NotFound();
+    var sb = new System.Text.StringBuilder();
+    sb.AppendLine("*** Receipt ***");
+    sb.AppendLine($"Sale #: {sale.Id}");
+    sb.AppendLine($"Date : {sale.Timestamp:yyyy-MM-dd HH:mm}");
+    sb.AppendLine($"Cashier: {sale.CashierId}");
+    sb.AppendLine("------------------------");
+    var repoObj = repo;
+    foreach (var item in sale.Items)
+    {
+        var product = repoObj.Products.FirstOrDefault(p => p.Id == item.ProductId);
+        string name = product?.Name ?? "#";
+        sb.AppendLine($"{name} x{item.Quantity} @ {item.UnitPrice:C} = {item.Quantity * item.UnitPrice:C}");
+    }
+    sb.AppendLine("------------------------");
+    sb.AppendLine($"TOTAL: {sale.Total:C}");
+    sb.AppendLine($"Payment: {sale.PaymentType}");
+    sb.AppendLine("Thank you!");
+    var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    return Results.File(bytes, "text/plain", $"receipt_{sale.Id}.txt");
+});
+
 app.MapRazorPages();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");

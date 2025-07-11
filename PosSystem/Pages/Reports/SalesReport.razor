@@ -1,0 +1,79 @@
+@page "/reports/sales"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@if (!IsAuthorized)
+{
+    <p>Redirecting...</p>
+}
+else
+{
+    <h3>Sales Report</h3>
+
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label">From</label>
+            <InputDate class="form-control" @bind-Value="from" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">To</label>
+            <InputDate class="form-control" @bind-Value="to" />
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-primary" @onclick="LoadReport">Load</button>
+        </div>
+        @if (summary is not null)
+        {
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-outline-success" @onclick="ExportCsv">Export CSV</button>
+            </div>
+        }
+    </div>
+
+    @if (summary is not null)
+    {
+        <div class="card p-3 mb-3">
+            <p>Total Sales: <strong>@summary.total:C</strong></p>
+            <p>Profit: <strong>@summary.profit:C</strong></p>
+            <p>Transactions: <strong>@summary.count</strong></p>
+        </div>
+    }
+}
+
+@code {
+    class SalesSummary
+    {
+        public DateTime from { get; set; }
+        public DateTime to { get; set; }
+        public decimal total { get; set; }
+        public decimal profit { get; set; }
+        public int count { get; set; }
+    }
+
+    private DateTime from = DateTime.Today;
+    private DateTime to = DateTime.Today;
+
+    private SalesSummary? summary;
+    private bool IsAuthorized => Auth.CurrentUser is { Role: Role.Admin };
+
+    protected override void OnInitialized()
+    {
+        if (!IsAuthorized)
+        {
+            Nav.NavigateTo("/login", true);
+        }
+    }
+
+    private async Task LoadReport()
+    {
+        var url = $"/reports/sales?from={from:O}&to={to:O}";
+        summary = await Http.GetFromJsonAsync<SalesSummary>(url);
+    }
+
+    private void ExportCsv()
+    {
+        var url = $"/reports/sales/export?from={from:O}&to={to:O}";
+        Nav.NavigateTo(url, true);
+    }
+}

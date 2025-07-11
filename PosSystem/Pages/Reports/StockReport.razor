@@ -1,0 +1,83 @@
+@page "/reports/stock"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@if (!IsAuthorized)
+{
+    <p>Redirecting...</p>
+}
+else
+{
+    <h3>Stock Report</h3>
+    <div class="mb-3">
+        <label class="form-check-label">
+            <input class="form-check-input" type="checkbox" @bind="showLow" /> Show low stock (&lt;=5)
+        </label>
+        <button class="btn btn-outline-success ms-3" @onclick="ExportCsv">Export CSV</button>
+    </div>
+
+    @if (data is null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <div class="card p-3 mb-3">
+            <p>Total Stock Value: <strong>@data.totalValue:C</strong></p>
+        </div>
+
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th class="text-end">Stock</th>
+                    <th class="text-end">CostPrice</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Filtered)
+                {
+                    <tr class="@(p.Stock<=5?"table-danger":"")">
+                        <td>@p.Id</td>
+                        <td>@p.Code</td>
+                        <td>@p.Name</td>
+                        <td class="text-end">@p.Stock</td>
+                        <td class="text-end">@p.CostPrice:C</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    class StockResponse
+    {
+        public decimal totalValue { get; set; }
+        public List<Product> products { get; set; } = new();
+    }
+
+    private bool showLow = false;
+    private StockResponse? data;
+    private bool IsAuthorized => Auth.CurrentUser is { Role: Role.Admin };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsAuthorized)
+        {
+            Nav.NavigateTo("/login", true);
+            return;
+        }
+        await Load();
+    }
+
+    private async Task Load() => data = await Http.GetFromJsonAsync<StockResponse>("/reports/stock");
+
+    private IEnumerable<Product> Filtered =>
+        data is null ? Enumerable.Empty<Product>() : data.products.Where(p => !showLow || p.Stock <= 5);
+
+    private void ExportCsv() => Nav.NavigateTo("/reports/stock/export", true);
+}
