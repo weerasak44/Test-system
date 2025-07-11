@@ -1,0 +1,93 @@
+@page "/management/members"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@if (!IsAuthorized)
+{
+    <p>Redirecting...</p>
+}
+else
+{
+    <h3>Member Management</h3>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Credit</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var m in members)
+            {
+                <tr>
+                    <td>@m.Id</td>
+                    <td>@m.Name</td>
+                    <td>@m.Phone</td>
+                    <td>@m.Credit:C</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteMember(m.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h5>Add New Member</h5>
+    <EditForm Model="newMember" OnValidSubmit="CreateMember">
+        <DataAnnotationsValidator />
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
+                <InputText class="form-control" placeholder="Name" @bind-Value="newMember.Name" />
+            </div>
+            <div class="col-md-4">
+                <InputText class="form-control" placeholder="Phone" @bind-Value="newMember.Phone" />
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary" type="submit">Add</button>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private List<Member> members = new();
+    private NewMemberModel newMember = new();
+    private bool IsAuthorized => Auth.CurrentUser is { Role: Role.Admin };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsAuthorized)
+        {
+            Nav.NavigateTo("/login", true);
+            return;
+        }
+        await LoadMembers();
+    }
+
+    private async Task LoadMembers() => members = await Http.GetFromJsonAsync<List<Member>>("/members") ?? new();
+
+    private async Task CreateMember()
+    {
+        await Http.PostAsJsonAsync("/members", new MemberCreateRequest(newMember.Name!, newMember.Phone));
+        newMember = new();
+        await LoadMembers();
+    }
+
+    private async Task DeleteMember(int id)
+    {
+        await Http.DeleteAsync($"/members/{id}");
+        await LoadMembers();
+    }
+
+    class NewMemberModel
+    {
+        [Required]
+        public string? Name { get; set; }
+        public string? Phone { get; set; }
+    }
+}

@@ -1,0 +1,103 @@
+@page "/management/products"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@if (!IsAuthorized)
+{
+    <p>Redirecting...</p>
+}
+else
+{
+    <h3>Product Management</h3>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Stock</th>
+                <th class="text-end">Normal</th>
+                <th class="text-end">Staff</th>
+                <th class="text-end">Wholesale</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in products)
+            {
+                <tr>
+                    <td>@p.Id</td>
+                    <td>@p.Code</td>
+                    <td>@p.Name</td>
+                    <td>@p.Stock</td>
+                    <td class="text-end">@p.NormalPrice:C</td>
+                    <td class="text-end">@p.StaffPrice:C</td>
+                    <td class="text-end">@p.WholesalePrice:C</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteProduct(p.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h5>Add New Product</h5>
+    <EditForm Model="newProduct" OnValidSubmit="CreateProduct">
+        <DataAnnotationsValidator />
+        <div class="row g-2 mb-3">
+            <div class="col-md-2"><InputText class="form-control" placeholder="Code" @bind-Value="newProduct.Code" /></div>
+            <div class="col-md-3"><InputText class="form-control" placeholder="Name" @bind-Value="newProduct.Name" /></div>
+            <div class="col-md-1"><InputNumber class="form-control" placeholder="Stock" @bind-Value="newProduct.Stock" /></div>
+            <div class="col-md-2"><InputNumber class="form-control" placeholder="Normal" @bind-Value="newProduct.NormalPrice" /></div>
+            <div class="col-md-2"><InputNumber class="form-control" placeholder="Staff" @bind-Value="newProduct.StaffPrice" /></div>
+            <div class="col-md-2"><InputNumber class="form-control" placeholder="Wholesale" @bind-Value="newProduct.WholesalePrice" /></div>
+            <div class="col-md-1 d-grid"><button class="btn btn-primary" type="submit">Add</button></div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private List<Product> products = new();
+    private NewProductModel newProduct = new();
+    private bool IsAuthorized => Auth.CurrentUser is { Role: Role.Admin };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsAuthorized)
+        {
+            Nav.NavigateTo("/login", true);
+            return;
+        }
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts() => products = await Http.GetFromJsonAsync<List<Product>>("/products") ?? new();
+
+    private async Task CreateProduct()
+    {
+        var req = new ProductCreateRequest(newProduct.Code!, newProduct.Name!, 0m, "pcs", newProduct.NormalPrice, newProduct.StaffPrice, newProduct.WholesalePrice, newProduct.Stock);
+        await Http.PostAsJsonAsync("/products", req);
+        newProduct = new();
+        await LoadProducts();
+    }
+
+    private async Task DeleteProduct(int id)
+    {
+        await Http.DeleteAsync($"/products/{id}");
+        await LoadProducts();
+    }
+
+    class NewProductModel
+    {
+        [Required]
+        public string? Code { get; set; }
+        [Required]
+        public string? Name { get; set; }
+        public int Stock { get; set; } = 0;
+        public decimal NormalPrice { get; set; }
+        public decimal StaffPrice { get; set; }
+        public decimal WholesalePrice { get; set; }
+    }
+}

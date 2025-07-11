@@ -105,6 +105,46 @@ app.MapPost("/members", (MemberCreateRequest req, Repositories repo) =>
     repo.Members.Add(member);
     return Results.Created($"/members/{member.Id}", member);
 });
+app.MapPut("/members/{id}", (int id, MemberUpdateRequest req, Repositories repo) =>
+{
+    var member = repo.Members.FirstOrDefault(m => m.Id == id);
+    if (member is null) return Results.NotFound();
+    member.Name = req.Name ?? member.Name;
+    member.Phone = req.Phone ?? member.Phone;
+    return Results.NoContent();
+});
+app.MapDelete("/members/{id}", (int id, Repositories repo) =>
+{
+    var member = repo.Members.FirstOrDefault(m => m.Id == id);
+    if (member is null) return Results.NotFound();
+    repo.Members.Remove(member);
+    return Results.NoContent();
+});
+
+// User endpoints
+app.MapGet("/users", (Repositories repo) => repo.Users);
+app.MapPost("/users", (UserCreateRequest req, Repositories repo) =>
+{
+    var user = new User { Id = repo.NextUserId++, Username = req.Username, Password = req.Password, Role = req.Role };
+    repo.Users.Add(user);
+    return Results.Created($"/users/{user.Id}", user);
+});
+app.MapPut("/users/{id}", (int id, UserUpdateRequest req, Repositories repo) =>
+{
+    var user = repo.Users.FirstOrDefault(u => u.Id == id);
+    if (user is null) return Results.NotFound();
+    user.Username = req.Username ?? user.Username;
+    if (!string.IsNullOrWhiteSpace(req.Password)) user.Password = req.Password!;
+    user.Role = req.Role ?? user.Role;
+    return Results.NoContent();
+});
+app.MapDelete("/users/{id}", (int id, Repositories repo) =>
+{
+    var user = repo.Users.FirstOrDefault(u => u.Id == id);
+    if (user is null) return Results.NotFound();
+    repo.Users.Remove(user);
+    return Results.NoContent();
+});
 
 // Sale endpoints
 app.MapPost("/sales", (SaleCreateRequest req, Repositories repo) =>
@@ -198,6 +238,8 @@ record Member
 
 record MemberCreateRequest(string Name, string? Phone);
 
+record MemberUpdateRequest(string? Name, string? Phone);
+
 enum PaymentType { Cash, Transfer, Credit }
 
 enum PriceLevel { Normal, Staff, Wholesale }
@@ -232,6 +274,10 @@ record User
     public Role Role { get; set; }
 }
 
+record UserCreateRequest(string Username, string Password, Role Role);
+
+record UserUpdateRequest(string? Username, string? Password, Role? Role);
+
 enum Role { Admin, Cashier }
 
 // --------------------- Repositories ---------------------
@@ -245,6 +291,7 @@ class Repositories
     public int NextProductId { get; set; } = 1;
     public int NextMemberId { get; set; } = 1;
     public int NextSaleId { get; set; } = 1;
+    public int NextUserId { get; set; } = 2; // starts after seeded admin
 
     public Repositories()
     {

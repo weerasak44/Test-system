@@ -1,0 +1,101 @@
+@page "/management/users"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@if (!IsAuthorized)
+{
+    <p>Redirecting...</p>
+}
+else
+{
+    <h3>User Management</h3>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in users)
+            {
+                <tr>
+                    <td>@u.Id</td>
+                    <td>@u.Username</td>
+                    <td>@u.Role</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteUser(u.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h5>Add New User</h5>
+    <EditForm Model="newUser" OnValidSubmit="CreateUser">
+        <DataAnnotationsValidator />
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <InputText class="form-control" placeholder="Username" @bind-Value="newUser.Username" />
+            </div>
+            <div class="col-md-3">
+                <InputText type="password" class="form-control" placeholder="Password" @bind-Value="newUser.Password" />
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" @bind="newUser.Role">
+                    @foreach (var r in Enum.GetValues<Role>())
+                    {
+                        <option value="@r">@r</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary" type="submit">Add</button>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private List<User> users = new();
+    private NewUserModel newUser = new();
+    private bool IsAuthorized => Auth.CurrentUser is { Role: Role.Admin };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsAuthorized)
+        {
+            Nav.NavigateTo("/login", true);
+            return;
+        }
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers() => users = await Http.GetFromJsonAsync<List<User>>("/users") ?? new();
+
+    private async Task CreateUser()
+    {
+        await Http.PostAsJsonAsync("/users", new UserCreateRequest(newUser.Username!, newUser.Password!, newUser.Role));
+        newUser = new();
+        await LoadUsers();
+    }
+
+    private async Task DeleteUser(int id)
+    {
+        await Http.DeleteAsync($"/users/{id}");
+        await LoadUsers();
+    }
+
+    class NewUserModel
+    {
+        [Required]
+        public string? Username { get; set; }
+        [Required]
+        public string? Password { get; set; }
+        public Role Role { get; set; } = Role.Cashier;
+    }
+}
