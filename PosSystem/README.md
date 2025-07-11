@@ -27,6 +27,15 @@ http://localhost:5000/swagger
 |----------|----------|-------|
 | admin    | admin    | Admin |
 
+## Blazor UI
+
+A basic Blazor Server UI is included with:
+
+* `/login` – หน้าลงชื่อเข้าใช้งาน
+* `/dashboard` – แดชบอร์ดขาย พร้อมส่วนค้นหา, บิล, และแผงชำระเงิน
+
+เปิดเบราว์เซอร์ที่ `http://localhost:5000/login` หลังสั่ง `dotnet run` เพื่อเข้าสู่ระบบ
+
 ## Caveats & Next Steps
 
 * **In-memory storage** – Data resets every time the application restarts. Replace the `Repositories` class with Entity Framework Core and a real database (e.g., SQLite, PostgreSQL).

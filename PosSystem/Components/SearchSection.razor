@@ -1,0 +1,39 @@
+@inject HttpClient Http
+
+<div class="mb-3">
+    <input class="form-control" placeholder="Search product code or name" @bind="term" @oninput="_ => SearchAsync()" />
+</div>
+@if (results?.Any() == true)
+{
+    <ul class="list-group">
+        @foreach (var p in results!)
+        {
+            <li class="list-group-item list-group-item-action" @onclick="() => Select(p)">@p.Code – @p.Name (@p.NormalPrice:C)</li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter] public EventCallback<Product> OnAddItem { get; set; }
+    private string? term;
+    private List<Product>? results;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(term)) { results = null; return; }
+        var products = await Http.GetFromJsonAsync<List<Product>>("/products");
+        results = products?.Where(p => p.Code.Contains(term, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(term, StringComparison.OrdinalIgnoreCase)).Take(10).ToList();
+    }
+
+    private async Task Select(Product p)
+    {
+        await OnAddItem.InvokeAsync(p);
+        term = string.Empty;
+        results = null;
+    }
+}

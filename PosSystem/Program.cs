@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,17 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
     opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
+builder.Services.AddRazorPages();
+builder.Services.AddServerSideBlazor();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<HttpClient>(sp =>
+{
+    var nav = sp.GetRequiredService<NavigationManager>();
+    return new HttpClient { BaseAddress = new Uri(nav.BaseUri) };
+});
+// Register application services
+builder.Services.AddSingleton<AuthService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -24,6 +36,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseStaticFiles();
+app.UseRouting();
 
 app.MapPost("/auth/login", (LoginRequest req, Repositories repo) =>
 {
@@ -147,6 +162,10 @@ app.MapGet("/reports/sales", (DateTime from, DateTime to, Repositories repo) =>
     return Results.Ok(new { from, to, total, profit, count = sales.Count });
 });
 
+app.MapRazorPages();
+app.MapBlazorHub();
+app.MapFallbackToPage("/_Host");
+
 app.Run();
 
 // --------------------- Models & DTOs ---------------------
@@ -232,4 +251,10 @@ class Repositories
         // Seed an admin user
         Users.Add(new User { Id = 1, Username = "admin", Password = "admin", Role = Role.Admin });
     }
+}
+
+class AuthService
+{
+    public User? CurrentUser { get; private set; }
+    public void SetUser(User? user) => CurrentUser = user;
 }

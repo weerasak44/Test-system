@@ -1,0 +1,80 @@
+@page "/dashboard"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@if (Auth.CurrentUser is null)
+{
+    Nav.NavigateTo("/login", true);
+}
+else
+{
+    <div class="container-fluid">
+        <div class="row bg-dark text-white p-2 align-items-center">
+            <div class="col-4">
+                <h4 class="m-0">POS Dashboard</h4>
+            </div>
+            <div class="col-4 text-center">
+                <span>@DateTime.Now.ToString("HH:mm:ss")</span>
+            </div>
+            <div class="col-4 text-end">
+                <span>@Auth.CurrentUser.Username (@Auth.CurrentUser.Role)</span>
+            </div>
+        </div>
+
+        <div class="row mt-3 p-2">
+            <div class="col-md-8">
+                <SearchSection OnAddItem="AddItemToBill" />
+            </div>
+            <div class="col-md-4">
+                <PaymentPanel @bind-PriceLevel="priceLevel" @bind-PaymentType="paymentType" OnPay="HandlePayment" OnCancel="HandleCancel" Total="@bill.Sum(i => i.Quantity * i.UnitPrice)" />
+            </div>
+        </div>
+
+        <div class="row p-2">
+            <BillTable Items="bill" OnRemoveItem="RemoveItem" />
+        </div>
+    </div>
+}
+
+@code {
+    private List<SaleItem> bill = new();
+    private PriceLevel priceLevel = PriceLevel.Normal;
+    private PaymentType paymentType = PaymentType.Cash;
+
+    private void AddItemToBill(Product product)
+    {
+        var existing = bill.FirstOrDefault(i => i.ProductId == product.Id);
+        if (existing is not null)
+            existing.Quantity++;
+        else
+            bill.Add(new SaleItem { ProductId = product.Id, Quantity = 1, UnitPrice = GetPrice(product) });
+    }
+
+    private decimal GetPrice(Product p) => priceLevel switch
+    {
+        PriceLevel.Normal => p.NormalPrice,
+        PriceLevel.Staff => p.StaffPrice,
+        PriceLevel.Wholesale => p.WholesalePrice,
+        _ => p.NormalPrice
+    };
+
+    private void RemoveItem(SaleItem item) => bill.Remove(item);
+
+    private async Task HandlePayment()
+    {
+        if (!bill.Any()) return;
+        var req = new SaleCreateRequest(Auth.CurrentUser!.Id, bill.Select(i => new SaleItemRequest(i.ProductId, i.Quantity)).ToList(), paymentType, priceLevel);
+        var response = await Http.PostAsJsonAsync("/sales", req);
+        if (response.IsSuccessStatusCode)
+        {
+            bill.Clear();
+        }
+        else
+        {
+            // handle error
+        }
+    }
+
+    private void HandleCancel() => bill.Clear();
+}

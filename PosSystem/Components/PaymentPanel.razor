@@ -1,0 +1,59 @@
+<div class="card p-3">
+    <div class="mb-2">
+        <label class="form-label">Price Level</label>
+        <select class="form-select" @bind="PriceLevel">
+            @foreach (var level in Enum.GetValues<PriceLevel>())
+            {
+                <option value="@level">@level</option>
+            }
+        </select>
+    </div>
+
+    <div class="mb-2">
+        <label class="form-label">Payment Type</label>
+        <select class="form-select" @bind="PaymentType">
+            @foreach (var t in Enum.GetValues<PaymentType>())
+            {
+                <option value="@t">@t</option>
+            }
+        </select>
+    </div>
+
+    <div class="my-3">
+        <h4>Total: @Total:C</h4>
+    </div>
+
+    <div class="d-grid gap-2">
+        <button class="btn btn-success" @onclick="OnPay" accesskey="f">Pay (F5)</button>
+        <button class="btn btn-outline-danger" @onclick="OnCancel" accesskey="c">Cancel (F9)</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public PriceLevel PriceLevel { get; set; }
+    [Parameter] public EventCallback<PriceLevel> PriceLevelChanged { get; set; }
+    [Parameter] public PaymentType PaymentType { get; set; }
+    [Parameter] public EventCallback<PaymentType> PaymentTypeChanged { get; set; }
+    [Parameter] public decimal Total { get; set; }
+
+    [Parameter] public EventCallback OnPay { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task PriceLevelChangedHandler(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PriceLevel>(e.Value?.ToString(), out var lvl))
+        {
+            PriceLevel = lvl;
+            await PriceLevelChanged.InvokeAsync(lvl);
+        }
+    }
+
+    private async Task PaymentTypeChangedHandler(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PaymentType>(e.Value?.ToString(), out var pt))
+        {
+            PaymentType = pt;
+            await PaymentTypeChanged.InvokeAsync(pt);
+        }
+    }
+}

@@ -1,0 +1,41 @@
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Product</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">Price</th>
+            <th class="text-end">Total</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Items?.Any() == true)
+        {
+            int index = 1;
+            foreach (var item in Items)
+            {
+                <tr>
+                    <td>@index</td>
+                    <td>@GetProductName(item.ProductId)</td>
+                    <td class="text-end">@item.Quantity</td>
+                    <td class="text-end">@item.UnitPrice:C</td>
+                    <td class="text-end">@(item.Quantity * item.UnitPrice):C</td>
+                    <td>
+                        <button class="btn btn-sm btn-link text-danger" title="Remove" @onclick="() => OnRemoveItem.InvokeAsync(item)">&#10005;</button>
+                    </td>
+                </tr>
+                index++;
+            }
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter] public List<SaleItem> Items { get; set; } = new();
+    [Parameter] public EventCallback<SaleItem> OnRemoveItem { get; set; }
+
+    [Inject] Repositories Repo { get; set; } = default!;
+
+    private string GetProductName(int id) => Repo.Products.FirstOrDefault(p => p.Id == id)?.Name ?? "";
+}

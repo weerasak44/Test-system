@@ -1,0 +1,54 @@
+@page "/login"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+<h3 class="text-center mt-5">Sign in</h3>
+<div class="d-flex justify-content-center mt-3">
+    <div class="card p-4" style="min-width: 320px;">
+        <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <InputText class="form-control" @bind-Value="loginModel.Username" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText class="form-control" @bind-Value="loginModel.Password" type="password" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+            @if (error is not null)
+            {
+                <p class="text-danger mt-2">@error</p>
+            }
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private LoginModel loginModel = new();
+    private string? error;
+
+    private async Task HandleLogin()
+    {
+        error = null;
+        var response = await Http.PostAsJsonAsync("/auth/login", loginModel);
+        if (response.IsSuccessStatusCode)
+        {
+            var user = await response.Content.ReadFromJsonAsync<User>();
+            Auth.SetUser(user);
+            Nav.NavigateTo("/dashboard");
+        }
+        else
+        {
+            error = "Invalid credentials";
+        }
+    }
+
+    class LoginModel
+    {
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+    }
+}
