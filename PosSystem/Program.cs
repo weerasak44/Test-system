@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Components;
+using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -263,6 +265,68 @@ app.MapGet("/sales/{id}/receipt", (int id, Repositories repo) =>
     return Results.File(bytes, "text/plain", $"receipt_{sale.Id}.txt");
 });
 
+// Receipt generation (PDF)
+app.MapGet("/sales/{id}/receipt/pdf", (int id, Repositories repo) =>
+{
+    var sale = repo.Sales.FirstOrDefault(s => s.Id == id);
+    if (sale is null) return Results.NotFound();
+    var doc = new ReceiptDocument(sale, repo.Products.ToList());
+    var pdfBytes = doc.GeneratePdf();
+    return Results.File(pdfBytes, "application/pdf", $"receipt_{sale.Id}.pdf");
+});
+
+// Low stock list
+app.MapGet("/reports/stock/low", (int threshold, Repositories repo) =>
+    repo.Products.Where(p => p.Stock <= threshold).ToList());
+
+// Profit by product report
+app.MapGet("/reports/profit/product", (DateTime from, DateTime to, Repositories repo) =>
+{
+    var querySales = repo.Sales.Where(s => s.Timestamp >= from && s.Timestamp <= to);
+    var dict = new Dictionary<int, ProfitEntry>();
+    foreach (var sale in querySales)
+    {
+        foreach (var item in sale.Items)
+        {
+            var product = repo.Products.FirstOrDefault(p => p.Id == item.ProductId);
+            var profit = (item.UnitPrice - (product?.CostPrice ?? 0)) * item.Quantity;
+            if (!dict.TryGetValue(item.ProductId, out var entry))
+            {
+                entry = new ProfitEntry(item.ProductId, product?.Name ?? "#", 0, 0m);
+            }
+            entry = entry with { Quantity = entry.Quantity + item.Quantity, Profit = entry.Profit + profit };
+            dict[item.ProductId] = entry;
+        }
+    }
+    return Results.Ok(dict.Values.OrderByDescending(e => e.Profit));
+});
+
+// CSV export profit by product
+app.MapGet("/reports/profit/product/export", (DateTime from, DateTime to, Repositories repo) =>
+{
+    var url = $"/reports/profit/product?from={from:O}&to={to:O}"; // reuse logic
+    var querySales = repo.Sales.Where(s => s.Timestamp >= from && s.Timestamp <= to);
+    var dict = new Dictionary<int, ProfitEntry>();
+    foreach (var sale in querySales)
+    {
+        foreach (var item in sale.Items)
+        {
+            var product = repo.Products.FirstOrDefault(p => p.Id == item.ProductId);
+            var profit = (item.UnitPrice - (product?.CostPrice ?? 0)) * item.Quantity;
+            if (!dict.TryGetValue(item.ProductId, out var entry))
+                entry = new ProfitEntry(item.ProductId, product?.Name ?? "#", 0, 0m);
+            entry = entry with { Quantity = entry.Quantity + item.Quantity, Profit = entry.Profit + profit };
+            dict[item.ProductId] = entry;
+        }
+    }
+    var sb = new System.Text.StringBuilder();
+    sb.AppendLine("ProductId,Name,Quantity,Profit");
+    foreach (var e in dict.Values)
+        sb.AppendLine($"{e.ProductId},{e.Name},{e.Quantity},{e.Profit}");
+    var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    return Results.File(bytes, "text/csv", $"profit_{from:yyyyMMdd}_{to:yyyyMMdd}.csv");
+});
+
 app.MapRazorPages();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
@@ -365,4 +429,48 @@ class AuthService
 {
     public User? CurrentUser { get; private set; }
     public void SetUser(User? user) => CurrentUser = user;
+}
+
+// --------------------- Additional DTO ---------------------
+record ProfitEntry(int ProductId, string Name, int Quantity, decimal Profit);
+
+// --------------------- PDF Document ---------------------
+class ReceiptDocument : IDocument
+{
+    private readonly Sale _sale;
+    private readonly List<Product> _products;
+    public ReceiptDocument(Sale sale, List<Product> products)
+    {
+        _sale = sale;
+        _products = products;
+    }
+
+    public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
+
+    public void Compose(IDocumentContainer container)
+    {
+        container.Page(page =>
+        {
+            page.Size(PageSizes.A6);
+            page.Margin(20);
+            page.Content().Column(col =>
+            {
+                col.Item().AlignCenter().Text("*** RECEIPT ***").Bold();
+                col.Item().Text($"Sale #: {_sale.Id}");
+                col.Item().Text($"Date  : {_sale.Timestamp:yyyy-MM-dd HH:mm}");
+                col.Item().Text($"Payment: {_sale.PaymentType}");
+                col.Item().Text("  ");
+
+                foreach (var item in _sale.Items)
+                {
+                    var product = _products.FirstOrDefault(p => p.Id == item.ProductId);
+                    var name = product?.Name ?? "#";
+                    col.Item().Text($"{name} x{item.Quantity} @ {item.UnitPrice:C} = {item.Quantity * item.UnitPrice:C}");
+                }
+                col.Item().Text("  ");
+                col.Item().BorderTop(1).PaddingTop(5).Text($"TOTAL: {_sale.Total:C}").Bold();
+                col.Item().AlignCenter().Text("Thank you!");
+            });
+        });
+    }
 }
